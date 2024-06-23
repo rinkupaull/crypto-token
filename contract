@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+
+contract CryptoToken is ERC20, Ownable, ERC20Burnable {
+    event Redeemed(address indexed user, string entryName, uint256 cost);
+
+    enum EntryType { Bitcoin, Ethereum, Solana }
+
+    mapping(EntryType => uint256) public entryCosts;
+    mapping(address => EntryType) public userRedemptions;
+ 
+    constructor(address initialOwner) ERC20("Crypto Token", "CTK") Ownable(initialOwner) {
+        initializeEntryCosts();
+    }
+
+    function initializeEntryCosts() internal {
+        entryCosts[EntryType.Bitcoin] = 800;
+        entryCosts[EntryType.Ethereum] = 1200;
+        entryCosts[EntryType.Solana] = 0; // Solana entry is free
+    }
+
+    function updateEntryCost(EntryType entryType, uint256 cost) external onlyOwner {
+        entryCosts[entryType] = cost;
+    }
+
+    function mintTokens(address recipient, uint256 amount) external onlyOwner {
+        _mint(recipient, amount);
+    }
+
+    function transferTokens(address recipient, uint256 amount) external {
+        require(balanceOf(msg.sender) >= amount, "INSUFFICIENT TOKENS!");
+        _transfer(msg.sender, recipient, amount);
+    }
+
+    function burnTokens(uint256 amount) external {
+        require(balanceOf(msg.sender) >= amount, "INSUFFICIENT TOKENS!");
+        _burn(msg.sender, amount);
+        emit Redeemed(msg.sender, "Burned tokens", amount);
+    }
+
+    function redeemEntryByName(string calldata entryName) external {
+        EntryType entryType = getEntryTypeByName(entryName);
+        uint256 cost = entryCosts[entryType];
+
+        require(cost >= 0, "Invalid entry type"); // Allow free entries
+        require(balanceOf(msg.sender) >= cost, "INSUFFICIENT TOKENS!");
+
+        userRedemptions[msg.sender] = entryType;
+        _burn(msg.sender, cost);
+        emit Redeemed(msg.sender, entryName, cost);
+    }
+
+    function getMyTokenBalance() external view returns (uint256) {
+        return balanceOf(msg.sender);
+    }
+
+    function getLastRedeemedEntry() external view returns (EntryType) {
+        return userRedemptions[msg.sender];
+    }
+
+    function getEntryTypeByName(string calldata entryName) internal pure returns (EntryType) {
+        if (compareStrings(entryName, "Bitcoin")) {
+            return EntryType.Bitcoin;
+        } else if (compareStrings(entryName, "Ethereum")) {
+            return EntryType.Ethereum;
+        } else if (compareStrings(entryName, "Solana")) {
+            return EntryType.Solana;
+        } else {
+            revert("Invalid entry name");
+        }
+    }
+
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+}
